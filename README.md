@@ -118,5 +118,98 @@ pip install fastapi asyncpg sentence-transformers aiokafka pybloom-live python-j
 
 ---
 
+### `rag-pipeline/` — AI/ML Engineer
+Production RAG pipeline: document ingestion (PDF/DOCX/TXT) with BGE-large-en-v1.5 embeddings, hybrid retrieval (BM25 + pgvector ANN + RRF), and Claude-powered generation with citation tracking. Includes a keyword-recall eval harness.
+
+**Setup:**
+```bash
+cd rag-pipeline
+pip install -r requirements.txt
+cp .env.example .env   # add ANTHROPIC_API_KEY + DATABASE_URL
+docker compose up -d   # starts pgvector/pgvector:pg16
+
+# Ingest a document and start Q&A
+python generation.py path/to/document.pdf
+```
+
+**File structure:**
+```
+ingestion.py    # DocumentIngester: PDF/DOCX/TXT chunking, SHA-256 dedup, BGE embed, HNSW index
+retrieval.py    # HybridRetriever: BM25Okapi + pgvector ANN, RRF fusion (RRF_K=60)
+generation.py   # RAGPipeline: Claude generation, token-budget context, citation tracking + eval harness
+```
+
+**Architecture highlights:**
+- BGE-large-en-v1.5 (1024-dim) embeddings via sentence-transformers
+- Idempotent ingestion via SHA-256 content hash deduplication
+- Hybrid retrieval: BM25 (rank-bm25) + pgvector HNSW cosine ANN, fused with Reciprocal Rank Fusion
+- Token-budget context window (12k chars) with citation tracking
+- Eval harness: 5-question keyword-recall suite, type `eval` in interactive loop
+
+---
+
+### `intelligence-connector/` — Software Engineer (Java)
+Spring Boot 3 / Java 21 contract-first REST service. OpenAPI 3.1 spec drives server stub generation, Feign client with fallback for upstream NEXUS platform, and a full MockMvc + WireMock integration test suite.
+
+**Run locally:**
+```bash
+cd intelligence-connector
+mvn spring-boot:run
+# API docs at http://localhost:8080/swagger-ui.html
+```
+
+**Run tests:**
+```bash
+mvn test
+```
+
+**File structure:**
+```
+src/main/resources/openapi.yaml                          # Contract-first API definition (OpenAPI 3.1)
+src/main/java/ai/torch/nexus/connector/
+  IntelEventController.java                              # REST controller: POST/GET /api/v1/intel/events
+  IntelEventService.java                                 # Business logic: enrichment, threat tier, entity extraction
+  NexusFeignClient.java                                  # Feign client with no-op fallback for upstream NEXUS
+src/test/java/ai/torch/nexus/connector/
+  IntelEventControllerTest.java                          # MockMvc + WireMock: happy path, 404, 400, circuit-breaker fallback
+```
+
+**Architecture highlights:**
+- Contract-first: `openapi-generator-maven-plugin` generates server stubs from `openapi.yaml` at build time
+- Java 21 with Spring Boot 3.2 (Jakarta EE, virtual threads compatible)
+- Feign client circuit-breaker: upstream 503 activates fallback stub, ingest still returns 202
+- WireMock stubs simulate upstream NEXUS platform in integration tests
+- In-memory store (ConcurrentHashMap) — swap for JPA repository in production
+
+---
+
+### `nexus-db/` — Database Administrator
+PostgreSQL 16 + TimescaleDB + pgvector schema design for the NEXUS intelligence platform. Includes 7 tables, 23 indexes, 6 analytical queries, RLS policies with audit trigger, and a TimescaleDB compression/retention strategy.
+
+**File structure:**
+```
+schema.sql                            # 7 tables: sources, analysts, intel_events (hypertable), entities,
+                                      #           event_entities, tags, event_tags, audit_log
+indexes.sql                           # 23 indexes (covering, partial, HNSW) + continuous aggregate
+rls_policies.sql                      # Clearance-gated RLS + PL/pgSQL audit trigger
+vacuum_settings.sql                   # Autovacuum tuning, TimescaleDB compression/retention policies
+queries/
+  query_01_source_dashboard.sql       # Source performance: volume rank + criticality rank
+  query_02_analyst_workload.sql       # PERCENTILE_CONT P50/P95 resolution time + clearance violations
+  query_03_entity_correlation.sql     # Co-occurrence correlation confidence score
+  query_04_threat_density_timeseries.sql  # Rolling 24h density + Z-score anomaly detection
+  query_05_geo_clustering.sql         # 1° lat/lon grid clustering with centroid
+  query_06_audit_trail.sql            # EXPORT/DELETE compliance trail with over-access flag
+```
+
+**Architecture highlights:**
+- TimescaleDB hypertable (`intel_events`) partitioned monthly — automatic chunk pruning via retention policy
+- pgvector HNSW index (m=16, ef_construction=64) for sub-millisecond semantic ANN search
+- Row-Level Security enforces clearance levels; `app.analyst_id` session variable set by API middleware
+- Continuous aggregate `hourly_threat_stats` refreshes every hour via TimescaleDB policy
+- TimescaleDB columnar compression (segment by source/tier) reduces storage 10-20×
+
+---
+
 ## Related Exercise Pages
 Full write-ups for each role are at [oakenai.tech/portfolio/torch](https://oakenai.tech/portfolio/torch).

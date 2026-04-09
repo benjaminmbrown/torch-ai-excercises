@@ -1,0 +1,190 @@
+openapi: "3.1.0"
+info:
+  title: NEXUS Intelligence Connector API
+  version: "1.0.0"
+  description: |
+    Contract-first REST API for ingesting and querying multi-INT intelligence events.
+    Supports SIGINT, HUMINT, IMINT, and OSINT source types.
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: IntelEvents
+    description: Intelligence event ingestion and retrieval
+
+paths:
+  /intel/events:
+    post:
+      tags: [IntelEvents]
+      operationId: ingestEvent
+      summary: Ingest a new intelligence event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntelEventRequest"
+      responses:
+        "202":
+          description: Event accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntelEventResponse"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Upstream NEXUS platform unavailable (circuit open)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags: [IntelEvents]
+      operationId: listEvents
+      summary: List recent intelligence events
+      parameters:
+        - name: sourceType
+          in: query
+          schema:
+            $ref: "#/components/schemas/SourceType"
+          description: Filter by INT source type
+        - name: threatTier
+          in: query
+          schema:
+            $ref: "#/components/schemas/ThreatTier"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paginated list of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IntelEventResponse"
+
+  /intel/events/{eventId}:
+    get:
+      tags: [IntelEvents]
+      operationId: getEvent
+      summary: Retrieve a single intelligence event by ID
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Event found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntelEventResponse"
+        "404":
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    SourceType:
+      type: string
+      enum: [SIGINT, HUMINT, IMINT, OSINT, MASINT]
+
+    ThreatTier:
+      type: string
+      enum: [FLASH, IMMEDIATE, PRIORITY, ROUTINE]
+
+    IntelEventRequest:
+      type: object
+      required: [sourceType, rawContent, classificationLevel]
+      properties:
+        sourceType:
+          $ref: "#/components/schemas/SourceType"
+        rawContent:
+          type: string
+          minLength: 1
+          maxLength: 32768
+          description: Raw intelligence text or encoded payload
+        classificationLevel:
+          type: string
+          enum: [UNCLASSIFIED, CONFIDENTIAL, SECRET, TOP_SECRET]
+        dtg:
+          type: string
+          description: Date-time group (DTG) string, e.g. 071430ZAPR26
+          pattern: "^\\d{6}[A-Z]\\w{3}\\d{2}$"
+        geoCoordinates:
+          $ref: "#/components/schemas/GeoCoordinates"
+        metadata:
+          type: object
+          additionalProperties: true
+
+    IntelEventResponse:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        sourceType:
+          $ref: "#/components/schemas/SourceType"
+        threatTier:
+          $ref: "#/components/schemas/ThreatTier"
+        classificationLevel:
+          type: string
+        summary:
+          type: string
+          description: AI-generated one-sentence summary
+        entities:
+          type: array
+          items:
+            type: string
+        geoCoordinates:
+          $ref: "#/components/schemas/GeoCoordinates"
+        ingestedAt:
+          type: string
+          format: date-time
+        processingStatus:
+          type: string
+          enum: [ACCEPTED, PROCESSING, COMPLETE, FAILED]
+
+    GeoCoordinates:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
