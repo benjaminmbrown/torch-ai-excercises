@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SITREP Event Timeline</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #080f1a; --surface: #0d1826; --surface-2: #111f30;
+      --border: rgba(255,255,255,0.07); --gold: #c9a14a; --gold-dim: rgba(201,161,74,0.1);
+      --teal: #2db6c7; --green: #34a876; --text: #e8edf5; --text-dim: #7a8fa8; --text-muted: #4a5d72;
+      --font: 'IBM Plex Sans', system-ui, sans-serif;
+      --mono: 'IBM Plex Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 28px 28px; }
+    header {
+      border-bottom: 1px solid var(--border); padding: 1rem 2rem;
+      display: flex; align-items: center; gap: 1.5rem;
+      background: rgba(8,15,26,0.9); position: sticky; top: 0; z-index: 10;
+    }
+    .header-brand { font-family: var(--mono); font-size: 0.7rem; color: var(--gold); letter-spacing: 0.12em; text-transform: uppercase; }
+    .header-title { font-size: 0.9rem; font-weight: 600; }
+    .header-meta { font-family: var(--mono); font-size: 0.68rem; color: var(--text-muted); margin-left: auto; }
+    .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    .classification {
+      font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--teal); border: 1px solid var(--border); border-left: 3px solid var(--teal);
+      background: rgba(45,182,199,0.06); padding: 0.6rem 1rem; border-radius: 0 4px 4px 0;
+      margin-bottom: 2rem;
+    }
+    .filter-bar {
+      display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .filter-bar input {
+      flex: 1; min-width: 200px; background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--mono); font-size: 0.8rem;
+      padding: 0.5rem 0.75rem; border-radius: 6px; outline: none;
+    }
+    .filter-bar input:focus { border-color: rgba(201,161,74,0.4); }
+    .filter-bar input::placeholder { color: var(--text-muted); }
+    .btn {
+      background: var(--gold); color: #080f1a; border: none; cursor: pointer;
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.5rem 1.2rem; border-radius: 6px;
+    }
+    .timeline { position: relative; padding-left: 2rem; }
+    .timeline::before {
+      content: ''; position: absolute; left: 7px; top: 0; bottom: 0;
+      width: 2px; background: linear-gradient(to bottom, var(--gold), rgba(201,161,74,0.1));
+    }
+    .event-card {
+      position: relative; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+      transition: border-color 0.2s;
+    }
+    .event-card:hover { border-color: rgba(201,161,74,0.25); }
+    .event-dot {
+      position: absolute; left: -2rem; top: 1.4rem;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--bg); border: 2px solid var(--gold);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .event-dot::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+    .event-head { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .event-seq { font-family: var(--mono); font-size: 0.65rem; color: var(--gold); background: var(--gold-dim); border: 1px solid rgba(201,161,74,0.2); border-radius: 4px; padding: 0.15rem 0.5rem; }
+    .event-ts { font-family: var(--mono); font-size: 0.75rem; color: var(--teal); }
+    .event-vessel { font-family: var(--mono); font-size: 0.65rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.12rem 0.45rem; }
+    .event-desc { font-size: 0.88rem; color: var(--text-dim); line-height: 1.55; margin-bottom: 0.75rem; }
+    .event-metrics { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .metric { font-family: var(--mono); font-size: 0.72rem; }
+    .metric .val { color: var(--text); font-weight: 500; }
+    .metric .lbl { color: var(--text-muted); font-size: 0.62rem; margin-left: 0.25rem; }
+    .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-family: var(--mono); font-size: 0.8rem; }
+    #add-form {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1.5rem; margin-bottom: 2rem; display: none;
+    }
+    #add-form.open { display: block; }
+    #add-form h3 { font-size: 0.88rem; margin-bottom: 1rem; color: var(--text-dim); font-family: var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .form-grid input, .form-grid textarea, .form-grid select {
+      background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+      font-family: var(--mono); font-size: 0.78rem; padding: 0.5rem 0.75rem; border-radius: 6px; outline: none; width: 100%;
+    }
+    .form-grid .full { grid-column: 1 / -1; }
+    .api-link { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+    .api-link a { font-family: var(--mono); font-size: 0.75rem; color: var(--teal); text-decoration: none; }
+    .api-link a:hover { color: var(--gold); }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="header-brand">Torch.AI // Operational Intelligence</div>
+    <div class="header-title">SITREP Event Timeline Parser</div>
+  </div>
+  <div class="header-meta">USS SPRUANCE / DDG-170 SHADOWING INCIDENT · 28 JAN 2024</div>
+</header>
+
+<div class="container">
+  <div class="classification">EXERCISE DATA — Full-Stack Engineer Assessment · Not operationally classified</div>
+
+  <div class="filter-bar">
+    <input type="text" id="search" placeholder="Search events..." oninput="filterEvents()">
+    <button class="btn" onclick="toggleForm()">+ Add Event</button>
+    <button class="btn" style="background:var(--surface);color:var(--text-dim);border:1px solid var(--border);" onclick="loadEvents()">Refresh</button>
+  </div>
+
+  <div id="add-form">
+    <h3>New Event</h3>
+    <div class="form-grid">
+      <input type="text" id="f-timestamp" placeholder="Timestamp (ISO: 2024-01-28T08:14:00Z)">
+      <input type="text" id="f-vessel" placeholder="Vessel (e.g. DDG-170)">
+      <input type="number" id="f-distance" placeholder="Distance (NM)" step="0.1">
+      <input type="number" id="f-speed" placeholder="Speed (kts)" step="0.1">
+      <textarea id="f-desc" class="full" rows="2" placeholder="Event description..."></textarea>
+    </div>
+    <button class="btn" onclick="submitEvent()">Submit</button>
+    <button class="btn" style="background:transparent;color:var(--text-muted);border:none;margin-left:0.5rem;" onclick="toggleForm()">Cancel</button>
+  </div>
+
+  <div class="timeline" id="timeline">
+    <div class="empty">Loading events...</div>
+  </div>
+
+  <div class="api-link">
+    <a href="/docs" target="_blank">API Docs (Swagger)</a> &nbsp;·&nbsp;
+    <a href="/events" target="_blank">GET /events (JSON)</a> &nbsp;·&nbsp;
+    <a href="/openapi.json" target="_blank">OpenAPI spec</a>
+  </div>
+</div>
+
+<script>
+  let allEvents = [];
+
+  async function loadEvents() {
+    const res = await fetch('/events');
+    allEvents = await res.json();
+    renderEvents(allEvents);
+  }
+
+  function filterEvents() {
+    const q = document.getElementById('search').value.toLowerCase();
+    const filtered = allEvents.filter(e =>
+      e.description.toLowerCase().includes(q) ||
+      e.vessel.toLowerCase().includes(q) ||
+      e.timestamp.toLowerCase().includes(q)
+    );
+    renderEvents(filtered);
+  }
+
+  function renderEvents(events) {
+    const container = document.getElementById('timeline');
+    if (!events.length) {
+      container.innerHTML = '<div class="empty">No events found.</div>';
+      return;
+    }
+    container.innerHTML = events.map(e => `
+      <div class="event-card">
+        <div class="event-dot"></div>
+        <div class="event-head">
+          <span class="event-seq">#${e.sequence}</span>
+          <span class="event-ts">${formatTs(e.timestamp)}</span>
+          <span class="event-vessel">${e.vessel}</span>
+        </div>
+        <div class="event-desc">${e.description}</div>
+        <div class="event-metrics">
+          ${e.distance_nm != null ? `<div class="metric"><span class="val">${e.distance_nm}</span><span class="lbl">NM</span></div>` : ''}
+          ${e.speed_kts != null ? `<div class="metric"><span class="val">${e.speed_kts}</span><span class="lbl">kts</span></div>` : ''}
+          ${e.bearing ? `<div class="metric"><span class="val">${e.bearing}</span><span class="lbl">bearing</span></div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function formatTs(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toUTCString().replace('GMT', 'Z');
+    } catch { return iso; }
+  }
+
+  function toggleForm() {
+    document.getElementById('add-form').classList.toggle('open');
+  }
+
+  async function submitEvent() {
+    const body = {
+      timestamp: document.getElementById('f-timestamp').value,
+      vessel: document.getElementById('f-vessel').value,
+      distance_nm: parseFloat(document.getElementById('f-distance').value) || null,
+      speed_kts: parseFloat(document.getElementById('f-speed').value) || null,
+      description: document.getElementById('f-desc').value,
+    };
+    if (!body.timestamp || !body.vessel || !body.description) {
+      alert('Timestamp, vessel, and description are required.');
+      return;
+    }
+    await fetch('/events', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toggleForm();
+    loadEvents();
+  }
+
+  loadEvents();
+</script>
+</body>
+</html>
