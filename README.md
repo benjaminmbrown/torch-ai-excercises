@@ -59,5 +59,38 @@ GitHub Actions CI pipeline covering:
 
 ---
 
+### `temporal-forecast/` — Software Engineer (Python)
+Production ML service for NEXUS intelligence time-series forecasting. FastAPI app with SQLite persistence, background model training, REST inference endpoints, structured JSON logging, and a full pytest suite.
+
+**Run locally:**
+```bash
+cd temporal-forecast
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+# API docs at http://localhost:8000/docs
+```
+
+**Endpoints:**
+- `GET /health` — liveness check
+- `POST /ingest` — submit a time series (triggers background model fit, returns 202)
+- `POST /forecast` — generate N-step forecast with 95% confidence intervals
+- `GET /series/{id}/history` — retrieve past forecasts for a series
+
+**Run tests:**
+```bash
+cd temporal-forecast
+pytest tests/ -v
+```
+
+**Architecture highlights:**
+- Ridge regression over neural nets — lower latency, interpretable, no GPU required
+- Sliding-window feature extraction: 6 lag features + 8 statistical features per window
+- 95% confidence intervals from in-sample residual std × 1.96
+- Background task model fitting so `/ingest` returns immediately
+- SQLAlchemy ORM with SQLite — swap to PostgreSQL via `DATABASE_URL` env var
+- Structured JSON logging compatible with Loki / CloudWatch
+
+---
+
 ## Related Exercise Pages
 Full write-ups for each role are at [oakenai.tech/portfolio/torch](https://oakenai.tech/portfolio/torch).
